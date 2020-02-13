@@ -3,3 +3,5 @@
 data/
 models/
 tensorboard/
+notebooks/.ipynb_checkpoints/
+notebooks/assets/__pycache__/
