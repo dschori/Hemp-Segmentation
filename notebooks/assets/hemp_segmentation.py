@@ -15,8 +15,11 @@
 
 import random
 import numpy as np
-import tensorflow as tf # TF2
+import tensorflow as tf  # TF2
 import matplotlib.pyplot as plt
+import cv2
+import skimage
+
 assert tf.__version__.startswith('2'), 'use tensorflow 2.x'
 
 IMG_WIDTH = 384
@@ -30,37 +33,38 @@ EPOCHS = 50
 SMOOTH = 1e-5
 
 BACKBONE_LAYER_NAMES = {
-                'vgg19': [
-                        'block2_conv2',
-                        'block3_conv4',
-                        'block4_conv4',
-                        'block5_conv4',
-                        'block5_pool'],
-                'resnet50': [
-                        'conv1_relu',
-                        'conv2_block3_out',
-                        'conv3_block4_out',
-                        'conv4_block6_out',
-                        'conv5_block3_out'],
-                'resnet50v2': [
-                        'conv1_conv',
-                        'conv2_block3_1_relu',
-                        'conv3_block4_1_relu',
-                        'conv4_block6_1_relu',
-                        'post_relu'],
-                'resnet101': [
-                        'conv1_relu',
-                        'conv2_block3_out',
-                        'conv3_block4_out',
-                        'conv4_block6_out',
-                        'conv5_block3_out'],
-                'mobilenetv2': [
-                        'block_1_expand_relu',
-                        'block_3_expand_relu',
-                        'block_6_expand_relu',
-                        'block_13_expand_relu',
-                        'block_16_project']
+    'vgg19': [
+        'block2_conv2',
+        'block3_conv4',
+        'block4_conv4',
+        'block5_conv4',
+        'block5_pool'],
+    'resnet50': [
+        'conv1_relu',
+        'conv2_block3_out',
+        'conv3_block4_out',
+        'conv4_block6_out',
+        'conv5_block3_out'],
+    'resnet50v2': [
+        'conv1_conv',
+        'conv2_block3_1_relu',
+        'conv3_block4_1_relu',
+        'conv4_block6_1_relu',
+        'post_relu'],
+    'resnet101': [
+        'conv1_relu',
+        'conv2_block3_out',
+        'conv3_block4_out',
+        'conv4_block6_out',
+        'conv5_block3_out'],
+    'mobilenetv2': [
+        'block_1_expand_relu',
+        'block_3_expand_relu',
+        'block_6_expand_relu',
+        'block_13_expand_relu',
+        'block_16_project']
 }
+
 
 class Config():
     dates = ['20190703', '20190719', '20190822']
@@ -68,13 +72,15 @@ class Config():
     seed = 1
     train_size = 0.8
 
+
 def decode_img(img):
-  # convert the compressed string to a 3D uint8 tensor
-  img = tf.image.decode_png(img, channels=3)
-  # Use `convert_image_dtype` to convert to floats in the [0,1] range.
-  img = tf.image.convert_image_dtype(img, tf.float32)
-  # resize the image to the desired size.
-  return img
+    # convert the compressed string to a 3D uint8 tensor
+    img = tf.image.decode_png(img, channels=3)
+    # Use `convert_image_dtype` to convert to floats in the [0,1] range.
+    img = tf.image.convert_image_dtype(img, tf.float32)
+    # resize the image to the desired size.
+    return img
+
 
 def process_path(image_path, mask_path):
     # load the raw data from the file as a string
@@ -85,21 +91,24 @@ def process_path(image_path, mask_path):
     msk = decode_img(msk)
     return img, msk, image_path
 
+
 def random_flip(image, mask, image_path):
     if tf.random.uniform(()) > 0.5:
         image = tf.image.flip_left_right(image)
         mask = tf.image.flip_left_right(mask)
-    
+
     if tf.random.uniform(()) > 0.5:
         image = tf.image.flip_up_down(image)
         mask = tf.image.flip_up_down(mask)
 
     return image, mask, image_path
 
+
 def random_crop(image, mask, image_path):
     stacked_image = tf.stack([image, mask], axis=0)
     cropped_image = tf.image.random_crop(stacked_image, size=[2, IMG_HEIGHT, IMG_WIDTH, 3])
     return cropped_image[0], cropped_image[1], image_path
+
 
 @tf.function
 def central_crop(image, mask, image_path):
@@ -107,18 +116,21 @@ def central_crop(image, mask, image_path):
     mask = mask[64:-64, 64:-64]
     return image, mask, image_path
 
+
 def add_gaussian_noise(image, mask, image_path):
     # image must be scaled in [0, 1]
     if tf.random.uniform(()) > 0.5:
-        noise = tf.random.normal(shape=tf.shape(image), mean=0.0, stddev=(10)/(255), dtype=tf.float32)
+        noise = tf.random.normal(shape=tf.shape(image), mean=0.0, stddev=(10) / (255), dtype=tf.float32)
         noise_img = image + noise
         noise_img = tf.clip_by_value(noise_img, 0.0, 1.0)
     else:
         noise_img = image
     return noise_img, mask, image_path
 
+
 def unindex(image, mask, image_path):
     return image, mask
+
 
 def create_train_datasets(train_set_list, val_set_list, test_set_list, buffer_size, batch_size):
     """Creates a tf.data Dataset.
@@ -134,17 +146,17 @@ def create_train_datasets(train_set_list, val_set_list, test_set_list, buffer_si
     train_set_masks = tf.data.Dataset.list_files(train_set_list[1], shuffle=False)
     train_set = tf.data.Dataset.zip((train_set_images, train_set_masks))
     train_set = train_set.shuffle(buffer_size)
-    
+
     train_set = train_set.map(process_path, num_parallel_calls=PARALLEL_CALLS)
     train_set = train_set.map(random_flip, num_parallel_calls=PARALLEL_CALLS)
     train_set = train_set.map(random_crop, num_parallel_calls=PARALLEL_CALLS)
     train_set = train_set.map(add_gaussian_noise, num_parallel_calls=PARALLEL_CALLS)
     train_set = train_set.batch(batch_size, drop_remainder=False)
-    
+
     val_set_images = tf.data.Dataset.list_files(val_set_list[0], shuffle=False)
     val_set_masks = tf.data.Dataset.list_files(val_set_list[1], shuffle=False)
     val_set = tf.data.Dataset.zip((val_set_images, val_set_masks))
-    
+
     val_set = val_set.map(process_path, num_parallel_calls=PARALLEL_CALLS)
     val_set = val_set.map(central_crop, num_parallel_calls=PARALLEL_CALLS)
     val_set = val_set.batch(batch_size, drop_remainder=False)
@@ -155,11 +167,12 @@ def create_train_datasets(train_set_list, val_set_list, test_set_list, buffer_si
 
     test_set = test_set.map(process_path, num_parallel_calls=PARALLEL_CALLS)
     test_set = test_set.batch(batch_size, drop_remainder=False)
-    
+
     return train_set, val_set, test_set
 
+
 def residual_upblock(filters, size, block_name, norm_type='batchnorm', apply_dropout=False):
-    #TODO:
+    # TODO:
     result = tf.keras.Sequential(name=block_name)
     result.add(tf.keras.layers.UpSampling2D(2))
 
@@ -173,6 +186,28 @@ def residual_upblock(filters, size, block_name, norm_type='batchnorm', apply_dro
 
     if apply_dropout:
         result.add(tf.keras.layers.Dropout(0.3))
+
+
+def simple_upblock_func(input_layer, filters, size, block_name, norm_type='batchnorm', apply_dropout=False):
+    x = tf.keras.layers.UpSampling2D(2, name=block_name)(input_layer)
+
+    x = tf.keras.layers.Conv2D(filters, size, padding='same')(x)
+    x = tf.keras.layers.ReLU()(x)
+
+    if norm_type.lower() == 'batchnorm':
+        x = tf.keras.layers.BatchNormalization()(x)
+
+    x = tf.keras.layers.Conv2D(filters, size, padding='same')(x)
+    x = tf.keras.layers.ReLU()(x)
+
+    if norm_type.lower() == 'batchnorm':
+        x = tf.keras.layers.BatchNormalization()(x)
+
+    if apply_dropout:
+        x = tf.keras.layers.Dropout(0.3)(x)
+
+    return x
+
 
 def simple_upblock(filters, size, block_name, norm_type='batchnorm', apply_dropout=False):
     """Upsamples an input.
@@ -206,10 +241,12 @@ def simple_upblock(filters, size, block_name, norm_type='batchnorm', apply_dropo
 
     return result
 
+
 def get_backbone_outputlayers(backbone, layer_names):
     layers = [backbone.get_layer(name).output for name in layer_names]
     return layers
-    
+
+
 def create_backbone(name='vgg19', set_trainable=True):
     if name == 'vgg19':
         backbone = tf.keras.applications.VGG19(input_shape=[IMG_HEIGHT, IMG_WIDTH, 3], include_top=False)
@@ -222,25 +259,71 @@ def create_backbone(name='vgg19', set_trainable=True):
     elif name == 'resnet101':
         backbone = tf.keras.applications.ResNet101(input_shape=[IMG_HEIGHT, IMG_WIDTH, 3], include_top=False)
     else:
-        raise ValueError('No Backbone for Name "{}" defined \nPossible Names are: {}'.format(name, list(BACKBONE_LAYER_NAMES.keys())))
-    print(backbone.summary())
+        raise ValueError('No Backbone for Name "{}" defined \nPossible Names are: {}'.format(name, list(
+            BACKBONE_LAYER_NAMES.keys())))
     layers = get_backbone_outputlayers(backbone, BACKBONE_LAYER_NAMES[name])
     extracted_backbone = tf.keras.Model(inputs=backbone.input, outputs=layers, name='backbone_' + name)
     extracted_backbone.trainable = set_trainable
 
     return extracted_backbone
 
+
+def create_backbone_func(name='vgg19', set_trainable=True):
+    if name == 'vgg19':
+        backbone = tf.keras.applications.VGG19(input_shape=[IMG_HEIGHT, IMG_WIDTH, 3], include_top=False)
+    elif name == 'resnet50':
+        backbone = tf.keras.applications.ResNet50(input_shape=[IMG_HEIGHT, IMG_WIDTH, 3], include_top=False)
+    elif name == 'resnet50v2':
+        backbone = tf.keras.applications.ResNet50V2(input_shape=[IMG_HEIGHT, IMG_WIDTH, 3], include_top=False)
+    elif name == 'mobilenetv2':
+        backbone = tf.keras.applications.MobileNetV2(input_shape=[IMG_HEIGHT, IMG_WIDTH, 3], include_top=False)
+    elif name == 'resnet101':
+        backbone = tf.keras.applications.ResNet101(input_shape=[IMG_HEIGHT, IMG_WIDTH, 3], include_top=False)
+    else:
+        raise ValueError('No Backbone for Name "{}" defined \nPossible Names are: {}'.format(name, list(
+            BACKBONE_LAYER_NAMES.keys())))
+
+    return backbone
+
+
 def create_decoder():
     decoder = [
         simple_upblock(512, 3, 'up_stack512'),  # 4x4 -> 8x8
         simple_upblock(256, 3, 'up_stack256'),  # 8x8 -> 16x16
         simple_upblock(128, 3, 'up_stack128'),  # 16x16 -> 32x32
-        simple_upblock(64, 3, 'up_stack64'),   # 32x32 -> 64x64
-        ]
+        simple_upblock(64, 3, 'up_stack64'),  # 32x32 -> 64x64
+    ]
     return decoder
 
-def segmentation_model(output_channels, backbone_name, backbone_trainable=True):
 
+def segmentation_model_func(output_channels, backbone_name, backbone_trainable=True):
+    down_stack = create_backbone_func(name=backbone_name, set_trainable=backbone_trainable)
+
+    skips = [down_stack.get_layer(BACKBONE_LAYER_NAMES[backbone_name][0]).output,
+             down_stack.get_layer(BACKBONE_LAYER_NAMES[backbone_name][1]).output,
+             down_stack.get_layer(BACKBONE_LAYER_NAMES[backbone_name][2]).output,
+             down_stack.get_layer(BACKBONE_LAYER_NAMES[backbone_name][3]).output,
+             down_stack.get_layer(BACKBONE_LAYER_NAMES[backbone_name][4]).output]
+
+    up_stack_filters = [64, 128, 256, 512]
+
+    x = skips[-1]
+    skips = reversed(skips[:-1])
+    up_stack_filters = reversed(up_stack_filters)
+
+    # Upsampling and establishing the skip connections
+    for skip, filters in zip(skips, up_stack_filters):
+        x = simple_upblock_func(x, filters, 3, 'up_stack' + str(filters))
+        x = tf.keras.layers.Concatenate()([x, skip])
+
+    x = tf.keras.layers.UpSampling2D(2)(x)
+    x = tf.keras.layers.Conv2D(32, 3, activation='relu', padding='same')(x)
+    x = tf.keras.layers.Conv2D(output_channels, 1, activation='softmax', padding='same', name='final_output')(x)
+
+    return tf.keras.Model(inputs=down_stack.layers[0].input, outputs=x)
+
+
+def segmentation_model_seq(output_channels, backbone_name, backbone_trainable=True):
     down_stack = create_backbone(name=backbone_name, set_trainable=backbone_trainable)
     up_stack = create_decoder()
 
@@ -264,6 +347,7 @@ def segmentation_model(output_channels, backbone_name, backbone_trainable=True):
 
     return tf.keras.Model(inputs=inputs, outputs=x)
 
+
 def display(image, mask, prediction=None):
     if prediction is None:
         _, ax = plt.subplots(1, 2, figsize=(15, 15))
@@ -281,24 +365,30 @@ def display(image, mask, prediction=None):
         ax[2].axis('off')
     plt.tight_layout()
 
+
 def show(dataset, model=None, rows=1, threshold=0.5):
     for batch in dataset.shuffle(512).take(rows):
         if model is None:
             image, mask = batch[0][0], batch[1][0]
-            display(image, mask, None)
+            tmp_mask = mask.numpy().copy()
+            tmp_mask[:, :, 2] = 0
+            overlay = cv2.add(image.numpy().astype(float), np.multiply(tmp_mask, 0.5).astype(float))
+            overlay = np.clip(overlay, 0, 1)
+            display(image, mask, overlay)
         else:
             prediction = model.predict(batch[0]) > threshold
             image, mask, prediction = batch[0][0], batch[1][0], prediction[0].astype(float)
             display(image, mask, prediction)
 
+
 def get_dice_score(msk, pred, skip_background=True):
     if skip_background:
         msk = msk[..., 0:2]
         pred = pred[..., 0:2]
-    
+
     batch_size = msk.shape[0]
     metric = []
-    
+
     for batch in range(batch_size):
         m, p = msk[batch], pred[batch]
         intersection = np.logical_and(m, p)
@@ -307,14 +397,17 @@ def get_dice_score(msk, pred, skip_background=True):
             denominator = np.finfo(float).eps
         dice_score = 2. * np.sum(intersection) / denominator
         metric.append(dice_score)
-    
+
     return np.mean(metric)
 
+
 def my_dice_metric_hemp(label, pred):
-    return tf.py_function(get_dice_score, [label>0.5, pred>0.5], tf.float32)
+    return tf.py_function(get_dice_score, [label > 0.5, pred > 0.5], tf.float32)
+
 
 def my_dice_metric_all(label, pred):
-    return tf.py_function(get_dice_score, [label>0.5, pred>0.5, False], tf.float32)
+    return tf.py_function(get_dice_score, [label > 0.5, pred > 0.5, False], tf.float32)
+
 
 def gather_channels(*xs, indexes=None, **kwargs):
     """Slice tensors along channels axis by given indexes"""
@@ -325,11 +418,13 @@ def gather_channels(*xs, indexes=None, **kwargs):
     xs = [_gather_channels(x, indexes=indexes, **kwargs) for x in xs]
     return xs
 
+
 def get_reduce_axes(per_image, backend=tf.keras.backend, **kwargs):
     axes = [1, 2] if backend.image_data_format() == 'channels_last' else [2, 3]
     if not per_image:
         axes.insert(0, 0)
     return axes
+
 
 def round_if_needed(x, threshold, backend=tf.keras.backend, **kwargs):
     if threshold is not None:
@@ -337,12 +432,14 @@ def round_if_needed(x, threshold, backend=tf.keras.backend, **kwargs):
         x = backend.cast(x, backend.floatx())
     return x
 
+
 def average(x, per_image=False, class_weights=None, backend=tf.keras.backend, **kwargs):
     if per_image:
         x = backend.mean(x, axis=0)
     if class_weights is not None:
         x = x * class_weights
     return backend.mean(x)
+
 
 def categorical_focal_loss(gt, pr, gamma=2.0, alpha=0.25, class_indexes=None, backend=tf.keras.backend, **kwargs):
     r"""Implementation of Focal Loss from the paper in multiclass classification
@@ -365,7 +462,8 @@ def categorical_focal_loss(gt, pr, gamma=2.0, alpha=0.25, class_indexes=None, ba
 
     return backend.mean(loss)
 
-def f_score(gt, pr, beta=1, class_weights=1, class_indexes=None, smooth=SMOOTH, per_image=False, threshold=None, 
+
+def f_score(gt, pr, beta=1, class_weights=1, class_indexes=None, smooth=SMOOTH, per_image=False, threshold=None,
             backend=tf.keras.backend, **kwargs):
     r"""The F-score (Dice coefficient) can be interpreted as a weighted average of the precision and recall,
     where an F-score reaches its best value at 1 and worst score at 0.
@@ -408,20 +506,26 @@ def f_score(gt, pr, beta=1, class_weights=1, class_indexes=None, smooth=SMOOTH, 
 
     return score
 
+
 def dice_loss(gt, pr):
     return 1 - f_score(gt, pr, class_weights=np.array([0.5, 0.5, 1.]), smooth=1.0)
+
 
 def focal_loss(gt, pr):
     return categorical_focal_loss(gt, pr)
 
+
 def cce_loss(gt, pr):
     return tf.keras.losses.categorical_crossentropy(gt, pr, label_smoothing=0.3)
+
 
 def dice_focal_loss(gt, pr, dice_weight=1., focal_weight=1.):
     return dice_weight * dice_loss(gt, pr) + focal_weight * focal_loss(gt, pr)
 
+
 def dice_cce(gt, pr, dice_weight=1., cce_weight=1.):
     return dice_weight * dice_loss(gt, pr) + cce_weight * cce_loss(gt, pr)
+
 
 class StepDecay():
     def __init__(self, initAlpha=0.01, factor=0.25, dropEvery=10):
@@ -439,3 +543,44 @@ class StepDecay():
         # return the learning rate
         print(" Learning Rate: " + str(float(alpha)))
         return float(alpha)
+
+
+def visualize_layers(input_img, input_msk, model, outputs, shift=0):
+    fig, ax = plt.subplots(len(outputs), 5, figsize=(14, 14))
+
+    input_msk[:, :, 2] = 0
+    out_img = cv2.add(input_img.astype(float), np.multiply(input_msk, 0.3).astype(float))
+    out_img = np.clip(out_img, 0, 1)
+
+    for j, output in enumerate(outputs):
+        submodel = tf.keras.models.Model([model.inputs[0]], [model.get_layer(output).output])
+        pred = submodel.predict(input_img.reshape(1, 384, 384, 3))
+
+        channels = []
+        stds = []
+        for channel in range(pred.shape[-1]):
+            layer = pred.squeeze()[:, :, channel]
+            stds.append(np.std(layer))
+            channels.append(layer)
+
+        if shift == 0:
+            stds = sorted(range(len(stds)), key=lambda x: stds[x])[-4:]
+        else:
+            stds = sorted(range(len(stds)), key=lambda x: stds[x])[-4 - shift:-shift]
+
+        channels = [channels[i] for i in stds]
+        channels = np.stack(channels, 0)
+
+        for c in range(4):
+            ax[j, c].imshow(skimage.filters.gaussian(channels[c], sigma=0.1), cmap='jet')
+
+        ax[j, 4].imshow(out_img)
+        ax[j, 4].axis('off')
+
+        for a in ax.flat:
+            a.set(ylabel=output)
+
+        for a in ax.flat:
+            a.label_outer()
+
+    plt.tight_layout(pad=2.)
