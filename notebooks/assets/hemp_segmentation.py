@@ -282,7 +282,7 @@ def create_backbone_func(name='vgg19', set_trainable=True):
     else:
         raise ValueError('No Backbone for Name "{}" defined \nPossible Names are: {}'.format(name, list(
             BACKBONE_LAYER_NAMES.keys())))
-
+    backbone.trainable = set_trainable
     return backbone
 
 
@@ -546,7 +546,7 @@ class StepDecay():
 
 
 def visualize_layers(input_img, input_msk, model, outputs, shift=0):
-    fig, ax = plt.subplots(len(outputs), 5, figsize=(14, 14))
+    fig, ax = plt.subplots(len(outputs), 5, figsize=(14, 12))
 
     input_msk[:, :, 2] = 0
     out_img = cv2.add(input_img.astype(float), np.multiply(input_msk, 0.3).astype(float))
@@ -555,7 +555,7 @@ def visualize_layers(input_img, input_msk, model, outputs, shift=0):
     for j, output in enumerate(outputs):
         submodel = tf.keras.models.Model([model.inputs[0]], [model.get_layer(output).output])
         pred = submodel.predict(input_img.reshape(1, 384, 384, 3))
-
+        plt.yticks()
         channels = []
         stds = []
         for channel in range(pred.shape[-1]):
@@ -572,15 +572,19 @@ def visualize_layers(input_img, input_msk, model, outputs, shift=0):
         channels = np.stack(channels, 0)
 
         for c in range(4):
-            ax[j, c].imshow(skimage.filters.gaussian(channels[c], sigma=0.1), cmap='jet')
+            ax[j, c].imshow(skimage.filters.gaussian(channels[c], sigma=0.1), cmap='jet', aspect='auto')
 
-        ax[j, 4].imshow(out_img)
-        ax[j, 4].axis('off')
+        ax[j, 4].imshow(out_img, aspect='auto')
 
         for a in ax.flat:
             a.set(ylabel=output)
+            a.set(xlabel="Layer response")
+
+        ax[j, 4].set_xlabel("Input Image")
 
         for a in ax.flat:
             a.label_outer()
 
     plt.tight_layout(pad=2.)
+
+    from rasterio.features import shapes
