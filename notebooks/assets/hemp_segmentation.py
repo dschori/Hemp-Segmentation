@@ -17,6 +17,7 @@ import random
 import numpy as np
 import tensorflow as tf  # TF2
 import matplotlib.pyplot as plt
+from skimage.io import imsave
 import cv2
 import skimage
 
@@ -110,6 +111,12 @@ def random_crop(image, mask, image_path):
     return cropped_image[0], cropped_image[1], image_path
 
 
+def random_brightness(image, mask, image_path):
+    image = tf.image.random_brightness(image, 0.2)
+    image = tf.clip_by_value(image, 0.0, 1.0)
+    return image, mask, image_path
+
+
 @tf.function
 def central_crop(image, mask, image_path):
     image = image[64:-64, 64:-64]
@@ -147,18 +154,16 @@ def create_train_datasets(train_set_list, val_set_list, test_set_list, buffer_si
     train_set = tf.data.Dataset.zip((train_set_images, train_set_masks))
     train_set = train_set.shuffle(buffer_size)
 
-    train_set = train_set.map(process_path, num_parallel_calls=PARALLEL_CALLS)
-    train_set = train_set.map(random_flip, num_parallel_calls=PARALLEL_CALLS)
-    train_set = train_set.map(random_crop, num_parallel_calls=PARALLEL_CALLS)
-    train_set = train_set.map(add_gaussian_noise, num_parallel_calls=PARALLEL_CALLS)
+    for func in [process_path, random_crop, random_brightness, random_flip, add_gaussian_noise]:
+        train_set = train_set.map(func, num_parallel_calls=PARALLEL_CALLS)
     train_set = train_set.batch(batch_size, drop_remainder=False)
 
     val_set_images = tf.data.Dataset.list_files(val_set_list[0], shuffle=False)
     val_set_masks = tf.data.Dataset.list_files(val_set_list[1], shuffle=False)
     val_set = tf.data.Dataset.zip((val_set_images, val_set_masks))
 
-    val_set = val_set.map(process_path, num_parallel_calls=PARALLEL_CALLS)
-    val_set = val_set.map(central_crop, num_parallel_calls=PARALLEL_CALLS)
+    for func in [process_path, central_crop]:
+        val_set = val_set.map(func, num_parallel_calls=PARALLEL_CALLS)
     val_set = val_set.batch(batch_size, drop_remainder=False)
 
     test_set_images = tf.data.Dataset.list_files(test_set_list[0], shuffle=False)
@@ -192,16 +197,18 @@ def simple_upblock_func(input_layer, filters, size, block_name, norm_type='batch
     x = tf.keras.layers.UpSampling2D(2, name=block_name)(input_layer)
 
     x = tf.keras.layers.Conv2D(filters, size, padding='same')(x)
-    x = tf.keras.layers.ReLU()(x)
 
     if norm_type.lower() == 'batchnorm':
         x = tf.keras.layers.BatchNormalization()(x)
+
+    x = tf.keras.layers.ReLU()(x)
 
     x = tf.keras.layers.Conv2D(filters, size, padding='same')(x)
-    x = tf.keras.layers.ReLU()(x)
 
     if norm_type.lower() == 'batchnorm':
         x = tf.keras.layers.BatchNormalization()(x)
+
+    x = tf.keras.layers.ReLU()(x)
 
     if apply_dropout:
         x = tf.keras.layers.Dropout(0.3)(x)
@@ -316,6 +323,7 @@ def segmentation_model_func(output_channels, backbone_name, backbone_trainable=T
         x = simple_upblock_func(x, filters, 3, 'up_stack' + str(filters))
         x = tf.keras.layers.Concatenate()([x, skip])
 
+    #x = simple_upblock_func(x, 32, 3, 'up_stack' + str(32))
     x = tf.keras.layers.UpSampling2D(2)(x)
     x = tf.keras.layers.Conv2D(32, 3, activation='relu', padding='same')(x)
     x = tf.keras.layers.Conv2D(output_channels, 1, activation='softmax', padding='same', name='final_output')(x)
@@ -546,7 +554,7 @@ class StepDecay():
 
 
 def visualize_layers(input_img, input_msk, model, outputs, shift=0):
-    fig, ax = plt.subplots(len(outputs), 5, figsize=(14, 12))
+    fig, ax = plt.subplots(len(outputs), 4, figsize=(15, 15))
 
     input_msk[:, :, 2] = 0
     out_img = cv2.add(input_img.astype(float), np.multiply(input_msk, 0.3).astype(float))
@@ -571,20 +579,22 @@ def visualize_layers(input_img, input_msk, model, outputs, shift=0):
         channels = [channels[i] for i in stds]
         channels = np.stack(channels, 0)
 
-        for c in range(4):
+        for c in range(3):
             ax[j, c].imshow(skimage.filters.gaussian(channels[c], sigma=0.1), cmap='jet', aspect='auto')
-
-        ax[j, 4].imshow(out_img, aspect='auto')
+            #imsave("../data/exports/{}_{}.png".format(c, j), channels[c], cmap='jet')
+        ax[j, 3].imshow(out_img, aspect='auto')
+        #imsave("../data/exports/out_img.png", out_img)
+        ax[j, 0].set(ylabel="Stage {}".format(j+1))
 
         for a in ax.flat:
-            a.set(ylabel=output)
             a.set(xlabel="Layer response")
 
-        ax[j, 4].set_xlabel("Input Image")
+        ax[j, 3].set_xlabel("Input Image")
 
         for a in ax.flat:
             a.label_outer()
 
     plt.tight_layout(pad=2.)
 
-    from rasterio.features import shapes
+
+counted_plants = {'1001_gt': [], '1001_pred': [], '1005_gt': [], '1005_pred': []}

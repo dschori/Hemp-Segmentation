@@ -215,6 +215,30 @@ class Segmentation_Evaluation:
         iou_score = np.sum(intersection) / np.sum(union)
         return iou_score
 
+    def evaluate_on_map(self, prediction_rasters, ground_truth_shapes):
+        def get_stiched_raster_pair(prediction_raster, gt_shapes):
+            species_encoding = {1001: 1, 1005: 2}
+
+            shapes = [feature.geometry for i, feature in gt_shapes.iterrows()]
+
+            pred_image, pred_transform = rio.mask.mask(prediction_raster, shapes, crop=True)
+            pred_image = np.moveaxis(pred_image, 0, -1).astype(float)
+
+            shapes = ((row.geometry, species_encoding[row.Species]) for _, row in gt_shapes.iterrows())
+            rastered_shape = rio.features.rasterize(shapes=shapes,
+                                                    out_shape=pred_image.shape[0:2],
+                                                    transform=pred_transform)
+
+            gt_image = [(rastered_shape == value).astype(float) for value in [1, 2, 0]]
+            gt_image = np.stack(gt_image, axis=-1)
+
+            return pred_image, gt_image
+
+        for prediction, shapes in zip(prediction_rasters, ground_truth_shapes):
+            pred_image, gt_image = get_stiched_raster_pair(prediction, shapes)
+            dice = self.dice_score(gt_image[:, :, 0:2]>0.5, pred_image[:, :, 0:2]>0.5)
+            print(dice)
+
     def evaluate_on_set(self, data_set, idx, apply_majority_vote=False, center_crop=False, skip_background=True):
         dates = ['20190703', '20190719', '20190822']
         scores = {}
