@@ -74,7 +74,7 @@ sev = Segmentation_Evaluation(model)
 
 pred = sev.majority_vote(preds, preds[1])
 
-msk = sev.stack_mask(msks[1])
+msk = sev.preprocess_mask(msks[1])
 
 _, ax = plt.subplots(1, 3, figsize=(15, 5))
 ax[0].imshow(imgs[1])
