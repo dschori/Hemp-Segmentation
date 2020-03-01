@@ -29,6 +29,10 @@ Example for usage:
 
 ```python
 
+from utils.data_interface import Dataset, Data_Interface
+from utils.evaluation import *
+from utils.hemp_segmentation import *
+
 class Config():
     dates = ['20190703', '20190719', '20190822']
     fields = ['Field_A', 'Field_C']
