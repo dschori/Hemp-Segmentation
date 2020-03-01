@@ -4,11 +4,9 @@ The  yield  of  crops  such  as  hemp  (Cannabis)  depends  on  various  factors
 
 ![alt text](docs/image/detection1.png)
 
-Hemp Detection: Green and Red corresponds to different Species
-
 ![alt text](docs/image/segmentation1.png)
 
-Hemp Segmentation: Green and Red corresponds to different Species
+Hemp Segmentation and Detection: Green and Red corresponds to different Species
 
 #### Required Packages:
 see: [requirements.txt](requirements.txt)
