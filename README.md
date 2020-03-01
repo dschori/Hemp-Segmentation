@@ -4,11 +4,9 @@ The  yield  of  crops  such  as  hemp  (Cannabis)  depends  on  various  factors
 
 ![alt text](docs/image/detection1.png)
 
-Hemp Detection: Green and Red corresponds to different Species
-
 ![alt text](docs/image/segmentation1.png)
 
-Hemp Segmentation: Green and Red corresponds to different Species
+Hemp Segmentation and Detection: Green and Red corresponds to different Species
 
 #### Required Packages:
 see: [requirements.txt](requirements.txt)
@@ -21,3 +19,75 @@ see: [requirements.txt](requirements.txt)
 * [data interface](utils/data_interface.py) Data Interface class to load image / mask pairs from the georeferenced .tif files
 * [hemp_segmentation](utils/hemp_segmentation.py) Tools for Hemp- Segmentation, including U-Net code
 * [evaluation](utils/utils.py) Tools for evaluation Purposes
+
+
+## Sample usage:
+
+Example for usage:
+
+```python
+
+from utils.data_interface import Dataset, Data_Interface
+from utils.evaluation import *
+from utils.hemp_segmentation import *
+
+class Config():
+    dates = ['20190703', '20190719', '20190822']
+    fields = ['Field_A', 'Field_C']
+
+d_0703_A = Dataset(name=Config.dates[0] + '_rgb_A', 
+            date=Config.dates[0],
+            rgb_path='../data/rasters/' + Config.dates[0] + '/rgb.tif',
+            ms_path=None,
+            mask_shapefile=Plant_Masks[Config.dates[0] + Config.fields[0]],
+            outer_shapefile=Fields['field_A'],
+            rgb_bands_to_read=[0, 1, 2],
+            ms_bands_to_read=None,
+            slice_shape=(384, 384))
+
+d_0719_A = Dataset(name=Config.dates[1] + '_rgb_A',  
+            date=Config.dates[1],
+            rgb_path='../data/rasters/' + Config.dates[1] + '/rgb.tif',
+            ms_path=None,
+            mask_shapefile=Plant_Masks[Config.dates[1] + Config.fields[0]],
+            outer_shapefile=Fields['field_A'],
+            rgb_bands_to_read=[0, 1, 2],
+            ms_bands_to_read=None,
+            grid=d_0703_A.grid.copy(),
+            slice_shape=(384, 384))
+
+d_0822_A = Dataset(name=Config.dates[2] + '_rgb_A',  
+            date=Config.dates[2],
+            rgb_path='../data/rasters/' + Config.dates[2] + '/rgb.tif',
+            ms_path=None,
+            mask_shapefile=Plant_Masks[Config.dates[2] + Config.fields[0]],
+            outer_shapefile=Fields['field_A'],
+            rgb_bands_to_read=[0, 1, 2],
+            ms_bands_to_read=None,
+            grid=d_0703_A.grid.copy(), slice_shape=(384, 384))
+
+di_test_A = Data_Interface([d_0703_A, d_0719_A, d_0822_A], {1001 : 1, 1005 : 2})
+
+imgs, msks = di_test_A.get_pair_on_same_date()
+
+preds = model.predict(imgs)
+
+sev = Segmentation_Evaluation(model)
+
+pred = sev.majority_vote(preds, preds[1])
+
+msk = sev.preprocess_mask(msks[1])
+
+_, ax = plt.subplots(1, 3, figsize=(15, 5))
+ax[0].imshow(imgs[1])
+ax[1].imshow(pred)
+ax[2].imshow(msk)
+ax[0].set_title("Input")
+ax[1].set_title("Prediction with Majority Voting")
+ax[2].set_title("Ground Truth Mask")
+
+```
+
+Results in:
+
+![alt text](docs/image/output1.png)
