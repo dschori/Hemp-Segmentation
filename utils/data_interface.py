@@ -31,10 +31,16 @@ import skimage
 import os
 
 class Dataset():
-    """ Creates a Dataset of specified of
+    """ Creates a Dataset to combine rgb and multispectral images
         Args:
-        gt: ground truth mask [batchsize, height, width, classes]
-        pr: prediction mask [batchsize, height, width, classes]
+        name: name of dataset as string with 8 characters
+        date: date of dataset as string. e.g: '20190703'
+        rgb_path: path to the rgb .tif file as string
+        ms_path: path to the multispectral .tif file as string
+        mask_shapefile: ground truth shapefile containing labeled plants as shapefile
+        outer_shapefile: outer shapefile to cut all maps as shapfile
+        rgb_bands_to_read: which bands from the rgb image to read as list of int
+        ms_bands_to_read: which bands from the multispectral image to read as list of int
         Returns:
         categorical crossentropy loss as tensor
     """
@@ -66,7 +72,7 @@ class Dataset():
         
     def initialize(self):
         if self.mask_shapefile is None:
-            print('Attention, no maks shapefile defined in Dataset {}'.format(self.name))
+            print('Attention, no mask shapefile defined in Dataset {}'.format(self.name))
         def replace_names(old_name):
             return old_name.replace(old_name[:8], self.name[:8])
 
@@ -240,13 +246,19 @@ class Data_Interface():
         else:
             msk = np.zeros(dataset.slice_shape)
 
-        img_rgb = self.__get_img(row, dataset, 'rgb')
-        if dataset.ms_bands_to_read is not None:
+        if dataset.rgb_bands_to_read is not None and dataset.ms_bands_to_read is not None:
+            img_rgb = self.__get_img(row, dataset, 'rgb')
             img_ms = self.__get_img(row, dataset, 'ms')
             img = np.concatenate([img_rgb, img_ms], axis=-1)
-        else:
-            img = img_rgb
-        
+
+        if dataset.ms_bands_to_read is not None:
+            img_ms = self.__get_img(row, dataset, 'ms')
+            img = img_ms.copy()
+
+        if dataset.rgb_bands_to_read is not None:
+            img_rgb = self.__get_img(row, dataset, 'rgb')
+            img = img_rgb.copy()
+
         if print_info:
             print(date, grid_id)
             
@@ -298,7 +310,7 @@ class Data_Interface():
         '''
 
         shapes = [row.outer_bounds for _, row in grid.iterrows()]
-        #return shapes
+
         if bands == 'rgb':
             with rio.open(dataset.rgb_path) as src:
                 out_image, _ = rio.mask.mask(src, shapes, crop=True)
@@ -311,7 +323,7 @@ class Data_Interface():
             raise ValueError("Wrong bands keyword, got {}".format(bands))
                 
         bands = resize(bands, dataset.slice_shape)
-        
+
         return bands
 
     def create_prediction(self, model, date):
@@ -322,4 +334,3 @@ class Data_Interface():
             if row.date != date:
                 continue
             img, msk = self.get_pair(grid_id=row.grid_id, date=row.date)
-
