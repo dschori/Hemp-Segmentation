@@ -19,5 +19,5 @@ see: [requirements.txt](requirements.txt)
  
 # [Utils:](utils/)
 * [data interface](utils/data_interface.py) Data Interface class to load image / mask pairs from the georeferenced .tif files
-* [hemp_segmentation](utils/hemp_segmentation.py) Config File
+* [hemp_segmentation](utils/hemp_segmentation.py) Tools for Hemp- Segmentation, including Unet code
 * [evaluation](utils/utils.py) Tools for evaluation Purposes
