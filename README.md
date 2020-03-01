@@ -28,9 +28,6 @@ see: [requirements.txt](requirements.txt)
 Example for usage:
 
 ```python
-# Note: 
-# - Model0 must be taken as the Model
-# - Input image must be a 3Channel RGB image with Ratio ~3:2
 
 class Config():
     dates = ['20190703', '20190719', '20190822']
@@ -90,3 +87,4 @@ ax[2].set_title("Ground Truth Mask")
 
 Results in:
 
+![alt text](docs/image/output1.png)
