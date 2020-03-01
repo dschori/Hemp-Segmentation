@@ -71,6 +71,7 @@ imgs, msks = di_test_A.get_pair_on_same_date()
 preds = model.predict(imgs)
 
 sev = Segmentation_Evaluation(model)
+
 pred = sev.majority_vote(preds, preds[1])
 
 msk = sev.stack_mask(msks[1])
