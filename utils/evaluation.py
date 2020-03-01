@@ -37,10 +37,6 @@ class Segmentation_Evaluation:
         self.model = model
         self.threshold = threshold
 
-    def preprocess_img(self, img):
-        # Convert to uint (for imgaug):
-        return img
-
     def preprocess_mask(self, msk):
         msk = [(msk == channel).astype(float) for channel in range(1, 3)]
 
@@ -50,117 +46,15 @@ class Segmentation_Evaluation:
         msk = np.concatenate((msk, background), axis=-1)
         return msk
 
-    def apply_watershed(self, pred):
-        pred = pred > 0.5
-        D = ndi.distance_transform_edt(pred)
-        localMax = peak_local_max(D, indices=False, min_distance=5,
-                                  labels=pred)
-
-        # perform a connected component analysis on the local peaks,
-        # using 8-connectivity, then appy the Watershed algorithm
-        markers = ndi.label(localMax, structure=np.ones((3, 3)))[0]
-        labels = watershed(D * -1, markers, mask=pred)
-        return labels
-
-    def post_process(self, pred):
-        prediction = pred.squeeze() > 0.5
-        shape = pred.shape[0:2]
-
-        # put all hemp to one class to get all hemp instances
-        all_hemp = np.zeros(shape)
-        for i in range(prediction.shape[-1] - 1):
-            all_hemp += prediction[:, :, i]
-
-        all_hemp = all_hemp > 0
-
-        if False:
-            hemp_instances = self.apply_watershed(all_hemp)
-        else:
-            all_hemp = remove_small_objects(all_hemp, 30)
-            hemp_instances = label(all_hemp)
-        new_prediction = np.zeros((*shape, 2))
-
-        # loop over instances and assign class acording to bigger sum:
-        for i in range(1, hemp_instances.max() + 1):
-            instance = hemp_instances == i
-            # instance = erosion(instance, disk(9))
-            instance_class1 = prediction[:, :, 0].copy()
-            instance_class1[instance == 0] = 0
-            instance_class2 = prediction[:, :, 1].copy()
-            instance_class2[instance == 0] = 0
-
-            if instance_class1.sum() > instance_class2.sum():
-                new_prediction[:, :, 0] += instance_class1
-            else:
-                new_prediction[:, :, 1] += instance_class2
-        for i in range(2):
-            new_prediction[:, :, i] = binary_dilation(new_prediction[:, :, i], disk(5))
-            new_prediction[:, :, i] = binary_erosion(new_prediction[:, :, i], disk(5))
-            new_prediction[:, :, i] = remove_small_holes(new_prediction[:, :, i] > 0.5, 30)
-
-        background = 1 - new_prediction.sum(axis=-1, keepdims=True)
-        new_prediction = np.concatenate((new_prediction, background), axis=-1)
-
-        return new_prediction.astype(float)
-
-    def majority_vote2(self, predictions_on_all_dates, pred):
-        ''' 
-        predictions_on_all_dates: predictions on 3 dates of same window in shape: (dates, heigth, width, classes)
-        pred: prediction on which to apply the voting in shape: (heigth, width, classes)
-        '''
-
-        predicted_hemp_instances = []
-        for i in range(2):
-            instances = label(pred[:, :, i])
-            for v in range(1, instances.max() + 1):
-                # skip small objects:
-                if np.sum(instances == v) < 50:
-                    continue
-                predicted_hemp_instances.append((instances == v).astype('bool'))
-
-        if len(predicted_hemp_instances) == 0:
-            no_instances = np.zeros((*pred.shape[0:2], 3))
-            no_instances[:, :, 2] = 1.0
-            return no_instances
-
-        predicted_hemp_instances = np.stack(predicted_hemp_instances, axis=0)
-
-        # loop over all dates:
-        for i, prediction_at_date in enumerate(predictions_on_all_dates):
-            max_values = [0 for _ in range(2)]
-
-        new_prediction = np.zeros((*pred.shape[0:2], 2))
-
-        for i, instance in enumerate(predicted_hemp_instances):
-            max_values = [0 for _ in range(2)]
-            # print(max_values)
-            classes = ['class0', 'class1']
-            for j, c in enumerate(classes):
-                tmp = np.sum(predictions_on_all_dates[:, :, :, j], axis=0)
-                # tmp = binary_dilation(tmp, disk(9))
-                tmp[instance == False] = 0
-                max_values[j] = tmp.max()
-            # print(max_values)
-            # print(np.argmax(max_values))
-            new_prediction[:, :, np.argmax(max_values)] += instance
-            # print(votes)
-
-        for i in range(2):
-            new_prediction[:, :, i] = binary_dilation(new_prediction[:, :, i], disk(5))
-            new_prediction[:, :, i] = binary_erosion(new_prediction[:, :, i], disk(5))
-            # new_prediction[:, :, i] = remove_small_holes(new_prediction[:, :, i]>0.5, 20)
-
-        background = 1 - new_prediction.sum(axis=-1, keepdims=True)
-        new_prediction = np.concatenate((new_prediction, background), axis=-1)
-        # print(new_prediction.max())
-        return np.clip(new_prediction, a_min=0.0, a_max=1.0)
 
     def majority_vote(self, predictions_on_all_dates, pred):
         ''' 
         predictions_on_all_dates: predictions on 3 dates of same window in shape: (dates, heigth, width, classes)
         pred: prediction on which to apply the voting in shape: (heigth, width, classes)
         '''
-        # TODO generalize and expand to n classes and dates
+
+        predictions_on_all_dates = predictions_on_all_dates > self.threshold
+        pred = pred > self.threshold
 
         predicted_hemp_instances = []
         for i in range(2):
@@ -394,38 +288,6 @@ def print_results(results_new, results_base):
     print(t)
 
 
-def print_results_old(results_base_val, results_base_test, results_val, results_test):
-    t = PrettyTable(['Date', 'Dice Validation', 'Diff to Val Base', 'Dice Test', 'Diff to Test Base'])
-    t.float_format = '0.2'
-    values = {'dice_base_val_20190703': np.nanmean(results_base_val['20190703']['dice_scores']) * 100,
-              'dice_base_test_20190703': np.nanmean(results_base_test['20190703']['dice_scores']) * 100,
-              'dice_base_val_20190719': np.nanmean(results_base_val['20190719']['dice_scores']) * 100,
-              'dice_base_test_20190719': np.nanmean(results_base_test['20190719']['dice_scores']) * 100,
-              'dice_base_val_20190822': np.nanmean(results_base_val['20190822']['dice_scores']) * 100,
-              'dice_base_test_20190822': np.nanmean(results_base_test['20190822']['dice_scores']) * 100,
-              'dice_val_20190703': np.nanmean(results_val['20190703']['dice_scores']) * 100,
-              'dice_test_20190703': np.nanmean(results_test['20190703']['dice_scores']) * 100,
-              'dice_val_20190719': np.nanmean(results_val['20190719']['dice_scores']) * 100,
-              'dice_test_20190719': np.nanmean(results_test['20190719']['dice_scores']) * 100,
-              'dice_val_20190822': np.nanmean(results_val['20190822']['dice_scores']) * 100,
-              'dice_test_20190822': np.nanmean(results_test['20190822']['dice_scores']) * 100
-              }
-
-    t.add_row(['20190703', values['dice_val_20190703'],
-               values['dice_val_20190703'] - values['dice_base_val_20190703'],
-               values['dice_test_20190703'],
-               values['dice_test_20190703'] - values['dice_base_test_20190703']])
-    t.add_row(['20190719', values['dice_val_20190719'],
-               values['dice_val_20190719'] - values['dice_base_val_20190719'],
-               values['dice_test_20190719'],
-               values['dice_test_20190719'] - values['dice_base_test_20190719']])
-    t.add_row(['20190822', values['dice_val_20190822'],
-               values['dice_val_20190822'] - values['dice_base_val_20190822'],
-               values['dice_test_20190822'],
-               values['dice_test_20190822'] - values['dice_base_test_20190822']])
-    print(t)
-
-
 def overlay_mask(img, mask, alpha=0.6):
     mask[:, :, 2] = 0
     out_img = cv2.add(img.astype(float), np.multiply(mask, alpha).astype(float))
@@ -509,6 +371,7 @@ def vectorize_prediction_map(prediction_map):
 
 
 def bb_intersection_over_union(boxA, boxB):
+    #credits: https://www.pyimagesearch.com/2016/11/07/intersection-over-union-iou-for-object-detection/
     # determine the (x, y)-coordinates of the intersection rectangle
     xA = max(boxA[0], boxB[0])
     yA = max(boxA[1], boxB[1])
