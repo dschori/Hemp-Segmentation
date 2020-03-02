@@ -12,7 +12,7 @@ Hemp Segmentation and Detection: Green and Red corresponds to different Species
 see: [requirements.txt](requirements.txt)
 
 # Documentation
-* [Doc_hemp_segmentation_damianschori_v10.pdf](docs/Doc_hemp_segmentation_damianschori_v10.pdf)
+* [Doc_HempSegmentation_DamianSchori.pdf](docs/Doc_HempSegmentation_DamianSchori.pdf)
  
  # [Notebooks:](notebooks/)
  * [Hemp Segmentation](notebooks/Hemp_Segmentation.ipynb) Summary of the steps described in the documentary
