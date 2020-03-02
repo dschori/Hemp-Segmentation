@@ -35,14 +35,12 @@ class Dataset():
         Args:
         name: name of dataset as string with 8 characters
         date: date of dataset as string. e.g: '20190703'
-        rgb_path: path to the rgb .tif file as string
-        ms_path: path to the multispectral .tif file as string
+        rgb_path: path to the rgb .tif file as string or None
+        ms_path: path to the multispectral .tif file as string or None
         mask_shapefile: ground truth shapefile containing labeled plants as shapefile
         outer_shapefile: outer shapefile to cut all maps as shapfile
-        rgb_bands_to_read: which bands from the rgb image to read as list of int
-        ms_bands_to_read: which bands from the multispectral image to read as list of int
-        Returns:
-        categorical crossentropy loss as tensor
+        rgb_bands_to_read: which bands from the rgb image to read as list of int or None
+        ms_bands_to_read: which bands from the multispectral image to read as list of int or None
     """
     def __init__(self, name, 
                  date,
@@ -87,9 +85,11 @@ class Dataset():
         self.grid['date'] = self.date
 
     def visualize(self, with_grid=False, with_mask=False):
-        '''
-        Shows bands of dataset
-        '''
+    """ Shows Bands of a Dataset
+        Args:
+        with_grid: Overlay Grid or not, True or False
+        with_mask: Overlay Mask or not, True or False
+    """
         sns.reset_orig()
 
         fig, ax = plt.subplots(nrows=1, ncols=len(self.rgb_bands_to_read), figsize=(14, 14))
@@ -120,13 +120,9 @@ class Dataset():
         plt.show()
         
     def __add_grid(self):
-        '''
-        Creates Grid with (x, y) sizes in px from outer_shapefile
-        outer_shapefile: geopandas shapefile
-        length_x: length x in px
-        length_y: length y in px
-        new_value: new values to overwrite current values
-        '''
+    """ Creates Grid with (x, y) sizes in px from outer_shapefile
+    
+    """
         with rio.open(self.rgb_path) as src:
             xmin, ymin, xmax, ymax = self.outer_shapefile.total_bounds
             length_y_pixel, length_x_pixel = self.slice_shape
@@ -169,6 +165,11 @@ class Dataset():
 
         
 class Data_Interface():
+    """ Creates a Datainterface based on Datasets to load Data
+        Args:
+        datasets: list of datasets
+        encoding: species encoding as dict: . e.g: {1001 : 1, 1005 : 2}
+    """
     def __init__(self, datasets, encoding):
         self.datasets = datasets
         self.species_encoding = encoding
