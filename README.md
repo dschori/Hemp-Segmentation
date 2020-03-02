@@ -70,7 +70,7 @@ d_0822_A = Dataset(name=Config.dates[2] + '_rgb_A',
             ms_bands_to_read=None,
             grid=d_0703_A.grid.copy(), slice_shape=(384, 384))
 
-#Create Data Interface
+#Create Data Interface:
 di_test_A = Data_Interface([d_0703_A, d_0719_A, d_0822_A], {1001 : 1, 1005 : 2})
 
 #Predict on all three dates:
