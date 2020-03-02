@@ -38,6 +38,7 @@ class Config():
     dates = ['20190703', '20190719', '20190822']
     fields = ['Field_A', 'Field_C']
 
+#Create Datasets:
 d_0703_A = Dataset(name=Config.dates[0] + '_rgb_A', 
             date=Config.dates[0],
             rgb_path='../data/rasters/' + Config.dates[0] + '/rgb.tif',
@@ -69,16 +70,16 @@ d_0822_A = Dataset(name=Config.dates[2] + '_rgb_A',
             ms_bands_to_read=None,
             grid=d_0703_A.grid.copy(), slice_shape=(384, 384))
 
+#Create Data Interface
 di_test_A = Data_Interface([d_0703_A, d_0719_A, d_0822_A], {1001 : 1, 1005 : 2})
 
+#Predict on all three dates:
 imgs, msks = di_test_A.get_pair_on_same_date()
-
 preds = model.predict(imgs)
 
+#Apply Majority Vote:
 sev = Segmentation_Evaluation(model)
-
 pred = sev.majority_vote(preds, preds[1])
-
 msk = sev.preprocess_mask(msks[1])
 
 _, ax = plt.subplots(1, 3, figsize=(15, 5))
