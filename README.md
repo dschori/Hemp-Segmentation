@@ -19,8 +19,8 @@ see: [requirements.txt](requirements.txt)
  * [Multispectral_Analysis](notebooks/Multispectral_Analysis.ipynb) Analysis of multispectral images for the species classification
  
 # [Utils:](utils/)
-* [data interface](utils/data_interface.py) Data Interface class to load image / mask pairs from the georeferenced .tif files
 * [hemp_segmentation](utils/hemp_segmentation.py) Tools for Hemp- Segmentation, including U-Net code
+* [data interface](utils/data_interface.py) Data Interface class to load image / mask pairs from the georeferenced .tif files
 * [evaluation](utils/utils.py) Tools for evaluation Purposes
 
 
