@@ -23,6 +23,11 @@ see: [requirements.txt](requirements.txt)
 * [data interface](utils/data_interface.py) Data Interface class to load image / mask pairs from the georeferenced .tif files
 * [evaluation](utils/utils.py) Tools for evaluation Purposes
 
+# Data:
+Password: "hemp-segmentation"
+* [Pretrained Model]() The trained model as tensorflow.keras model
+* [Image Data]() The image data used for training and testing
+
 
 ## Sample usage:
 
