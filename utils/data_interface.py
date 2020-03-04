@@ -84,12 +84,6 @@ class Dataset():
 
         self.grid['date'] = self.date
 
-    def visualize(self, with_grid=False, with_mask=False):
-    """ Shows Bands of a Dataset
-        Args:
-        with_grid: Overlay Grid or not, True or False
-        with_mask: Overlay Mask or not, True or False
-    """
         sns.reset_orig()
 
         fig, ax = plt.subplots(nrows=1, ncols=len(self.rgb_bands_to_read), figsize=(14, 14))
@@ -120,9 +114,9 @@ class Dataset():
         plt.show()
         
     def __add_grid(self):
-    """ Creates Grid with (x, y) sizes in px from outer_shapefile
-    
-    """
+        """ Creates Grid with (x, y) sizes in px from outer_shapefile
+
+        """
         with rio.open(self.rgb_path) as src:
             xmin, ymin, xmax, ymax = self.outer_shapefile.total_bounds
             length_y_pixel, length_x_pixel = self.slice_shape
@@ -182,6 +176,8 @@ class Data_Interface():
             print("- {}".format(dataset.name))
 
     def combine_df(self):
+        """  Combine Dataframes of all added Datasets
+        """
         dfs = []
         for dataset in self.datasets:
             grid_df = dataset.grid.copy()
@@ -195,6 +191,11 @@ class Data_Interface():
         return np.concatenate((msks, background), axis=-1)
 
     def save(self, folder_name, skip_black_greater=0.):
+        """ Extrakt slices according to grid and save in folder as images
+        Args:
+        folder_name: Name of folder to save, as string
+        skip_black_greater: Skip images containing more black than this value
+        """
         save_path = '../data/sliced/' + folder_name + '/'
 
         if not os.path.exists(save_path):
@@ -212,11 +213,13 @@ class Data_Interface():
             imsave(save_path + 'masks/' + str(row.date) + "_" + str(row.grid_id) + ".png", skimage.img_as_ubyte(msk))
 
     def get_pair(self, grid_id='random', date='random', print_info=False):
-        '''
-        Returns image with all bands added to memory and coressponding mask
-        grid_idx: the id of the grid on which to return corresponding image and mask
-        returns: image, mask with shape (heigth, width, number_bands), (heigth, width)
-        '''
+        """ Returns an image / mask pair of the specified channels
+        Args:
+        grid_id: Name of Grid ID, according to dataframe as string
+        date: Name of Date according to dataframe as string
+        Returns:
+        images and masks as tuple of numpy arrays: ([height, width, channels], [height, width, classes])
+        """
         if date == 'random':
             date = random.sample(self.df.date.unique().tolist(), 1)[0]
         elif date not in self.df.date.unique().tolist():
@@ -266,6 +269,12 @@ class Data_Interface():
         return img, msk
     
     def get_pair_on_same_date(self, grid_id='random', print_info=False):
+        """ Returns an image / mask pair of the specified channels on all dates in the interface
+        Args:
+        grid_id: Name of Grid ID, according to dataframe as string
+        Returns:
+        images and masks as tuple of numpy arrays: ([dates, height, width, channels], [dates, height, width, classes])
+        """
         imgs = []
         msks = []
 
@@ -285,11 +294,6 @@ class Data_Interface():
         return np.stack(imgs, axis=0), np.stack(msks, axis=0)
     
     def __get_rastered_mask(self, grid, dataset, shapefile):
-        '''
-        Raster a single row of daframe with the corresponding bounding box
-        row: row of geodataframe
-        bbox: bounding box as polygon
-        '''
         transform = rio.transform.from_bounds(*grid.outer_bounds.values[0].bounds, *dataset.slice_shape)
         objects =  gpd.overlay(shapefile, grid, how='intersection')
         shapes = ((row.geometry, self.species_encoding[row.Species]) for _, row in objects.iterrows())
@@ -304,11 +308,6 @@ class Data_Interface():
         return rastered_shape
 
     def __get_img(self, grid, dataset, bands='rgb'):
-        '''
-        Returns sliced from geo bunds of all bands in memory
-        bounds: geo bounds of tuple (left, bottom, right, top)
-        returns: imgs, sliced images 
-        '''
 
         shapes = [row.outer_bounds for _, row in grid.iterrows()]
 

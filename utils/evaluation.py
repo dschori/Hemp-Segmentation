@@ -34,6 +34,11 @@ import pandas as pd
 
 class Segmentation_Evaluation:
     def __init__(self, model, threshold=0.5):
+        """ Creates a Segmentation_Evaluation object
+            Args:
+            model: tensorflow.keras model
+            threshold: threshold to apply to predictions
+        """
         self.model = model
         self.threshold = threshold
 
@@ -48,10 +53,13 @@ class Segmentation_Evaluation:
 
 
     def majority_vote(self, predictions_on_all_dates, pred):
-        ''' 
-        predictions_on_all_dates: predictions on 3 dates of same window in shape: (dates, heigth, width, classes)
-        pred: prediction on which to apply the voting in shape: (heigth, width, classes)
-        '''
+        """ Applies majority vote based on three dates
+            Args:
+            predictions_on_all_dates: predictions on all dates as numpy array with [date, height, width, classes]
+            pred: prediction to apply majority vote as numpy array with [height, width, classes]
+            Returns:
+            prediction as numpy array with [height, width, classes]
+        """
 
         predictions_on_all_dates = predictions_on_all_dates > self.threshold
         pred = pred > self.threshold
@@ -99,18 +107,39 @@ class Segmentation_Evaluation:
         return np.clip(new_prediction, a_min=0.0, a_max=1.0)
 
     def dice_score(self, msk, pred):
+        """ Applies calculates dice score between ground truth and prediction
+            Args:
+            msk: ground truth mask as numpy array (type bool) with [height, width, classes]
+            pred: prediction mask as numpy array (type bool) with [height, width, classes]
+            Returns:
+            score as float
+        """
         intersection = np.logical_and(msk, pred)
         denominator = np.sum(msk) + np.sum(pred)
         dice_score = 2. * np.sum(intersection) / denominator
         return dice_score
 
     def iou_score(self, msk, pred):
+        """ Applies calculates iou score between ground truth and prediction
+            Args:
+            msk: ground truth mask as numpy array (type bool) with [height, width, classes]
+            pred: prediction mask as numpy array (type bool) with [height, width, classes]
+            Returns:
+            score as float
+        """
         intersection = np.logical_and(msk, pred)
         union = np.logical_or(msk, pred)
         iou_score = np.sum(intersection) / np.sum(union)
         return iou_score
 
     def evaluate_on_map(self, prediction_rasters, ground_truth_shapes):
+        """ Evaluates the accuracy of the predicted maps
+            Args:
+            prediction_rasters: predicted map as list of rasterio.open
+            ground_truth_shapes:  corresponding ground truth shapes as geopandas file
+            Returns:
+            values as list of float
+        """
         def get_stiched_raster_pair(prediction_raster, gt_shapes):
             species_encoding = {1001: 1, 1005: 2}
 
@@ -195,6 +224,14 @@ class Segmentation_Evaluation:
         return scores
 
     def create_prediction_map(self, data_interface, dataset_index, get_arr=False, apply_majority_vote=False, overlap=0):
+        """ Creates a prediction map based on a data_interface and saves it as .tif file
+            Args:
+            data_interface: data interface object
+            dataset_index:  index on which dataset of interface to create the prediction map as int
+            get_arr: return the created array as numpy array or not
+            apply_majority_vote: apply majority voting or not
+            overlap: overlap between predictions as int
+        """
 
         srcs = [rio.open(dataset.rgb_path) for dataset in data_interface.datasets]
 
