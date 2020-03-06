@@ -25,7 +25,7 @@ see: [requirements.txt](requirements.txt)
 
 # Data:
 Password: "hemp-segmentation"
-* [Pretrained Model](https://drive.switch.ch/index.php/s/ARkdCvvkFrVFbAN) The trained model as tensorflow.keras model
+* [Pretrained Hemp Model](https://drive.switch.ch/index.php/s/ARkdCvvkFrVFbAN) The trained model on the hemp-plants as tensorflow.keras model
 * [Image Data](https://drive.switch.ch/index.php/s/ARkdCvvkFrVFbAN) The image data used for training and testing
 
 
